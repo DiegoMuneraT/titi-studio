@@ -1654,6 +1654,17 @@
 
   <div class="admin-panel" id="adminPanel">
     <h4>Panel de administración — Galería</h4>
+    <div style="margin-bottom:1.5rem;padding-bottom:1.5rem;border-bottom:1px solid var(--border);">
+      <label style="display:block;font-size:0.65rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--muted);margin-bottom:0.75rem;font-weight:500;">Foto del artista</label>
+      <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;">
+        <div id="artistThumb" style="width:60px;height:60px;border:1px solid var(--border);background:var(--surface);display:flex;align-items:center;justify-content:center;font-size:1.5rem;flex-shrink:0;overflow:hidden;">◈</div>
+        <div>
+          <input type="file" id="artistFileInput" accept="image/*" style="display:none;">
+          <button onclick="document.getElementById('artistFileInput').click()" style="background:transparent;border:1px solid var(--border-strong);color:var(--gold);padding:0.5rem 1.1rem;font-family:'Outfit',sans-serif;font-size:0.75rem;letter-spacing:0.15em;text-transform:uppercase;cursor:pointer;">Subir foto</button>
+          <p id="artistUploadStatus" style="font-size:0.78rem;color:var(--muted);margin-top:0.4rem;display:none;"></p>
+        </div>
+      </div>
+    </div>
     <div style="display:flex;flex-wrap:wrap;gap:1rem;align-items:flex-end;margin-bottom:1rem;">
       <div style="flex:1;min-width:200px;">
         <label style="display:block;font-size:0.65rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--muted);margin-bottom:0.5rem;font-weight:500;">Categoría</label>
@@ -1693,10 +1704,11 @@
   <div class="artist-layout">
     <div class="artist-portrait reveal">
       <div class="artist-portrait-frame">
-        <div class="portrait-placeholder">
+        <div class="portrait-placeholder" id="artistPlaceholder">
           <div class="icon">◈</div>
           <p>Foto del artista</p>
         </div>
+        <img id="artistPhoto" src="" alt="Artista" style="display:none;position:absolute;inset:0;width:100%;height:100%;object-fit:cover;filter:grayscale(30%);">
       </div>
       <div class="artist-accent"></div>
       <div class="artist-cert">
@@ -2173,7 +2185,8 @@ async function loadImagesFromGitHub() {
     const data = await res.json();
     if (data.error) return;
     galleryFileSha = data.sha;
-    uploadedImages = data.images;
+    uploadedImages = data.images || [];
+    if (data.artistPhoto) setArtistPhoto(data.artistPhoto);
     renderGallery();
   } catch(e) { console.warn('Error cargando galería:', e); }
 }
@@ -2181,10 +2194,11 @@ async function loadImagesFromGitHub() {
 async function saveImagesToGitHub() {
   setStatus('Guardando...');
   try {
+    const currentArtistPhoto = document.getElementById('artistPhoto').src || null;
     const res = await fetch('/.netlify/functions/gallery-save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ images: uploadedImages, sha: galleryFileSha })
+      body: JSON.stringify({ images: uploadedImages, sha: galleryFileSha, artistPhoto: currentArtistPhoto || null })
     });
     const data = await res.json();
     if (data.sha) {
@@ -2228,15 +2242,24 @@ function renderGallery() {
   `).join('');
 }
 
-function deleteItem(e, id) {
+async function deleteItem(e, id) {
   e.stopPropagation();
   if (!confirm('¿Eliminar esta foto de la galería?')) return;
   const idx = galleryData.findIndex(i => i.id === id);
   if (idx > -1) galleryData.splice(idx, 1);
   const uidx = uploadedImages.findIndex(i => i.id === id);
+  const item = uploadedImages[uidx];
   if (uidx > -1) uploadedImages.splice(uidx, 1);
   renderGallery();
-  saveImagesToGitHub();
+  await saveImagesToGitHub();
+  // Delete from Cloudinary
+  if (item && item.publicId) {
+    fetch('/.netlify/functions/cloudinary-delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ publicId: item.publicId })
+    }).catch(e => console.warn('Error eliminando de Cloudinary:', e));
+  }
 }
 
 // Filter buttons
@@ -2322,6 +2345,7 @@ document.getElementById('fileInput').addEventListener('change', async e => {
       uploadedImages.push({
         id: Date.now() + Math.random(),
         src: url,
+        publicId: url.split('/').slice(-2).join('/').replace(/\.[^.]+$/, ''),
         cat: selectedCat,
         label: catLabels[selectedCat] || 'Nuevo'
       });
@@ -2434,6 +2458,57 @@ document.getElementById('contactForm').addEventListener('submit', async function
     submitBtn.textContent = 'Enviar mensaje →';
     submitBtn.disabled = false;
   }
+});
+
+// ─── ARTIST PHOTO ───
+function setArtistPhoto(url) {
+  const img = document.getElementById('artistPhoto');
+  const placeholder = document.getElementById('artistPlaceholder');
+  const thumb = document.getElementById('artistThumb');
+  if (!url) return;
+  img.src = url;
+  img.style.display = 'block';
+  if (placeholder) placeholder.style.display = 'none';
+  if (thumb) { thumb.innerHTML = ''; thumb.style.backgroundImage = `url(${url})`; thumb.style.backgroundSize = 'cover'; thumb.style.backgroundPosition = 'center'; }
+}
+
+async function loadArtistPhoto() {
+  try {
+    const res = await fetch('/.netlify/functions/gallery-read');
+    const data = await res.json();
+    if (data.artistPhoto) setArtistPhoto(data.artistPhoto);
+  } catch(e) {}
+}
+
+document.getElementById('artistFileInput').addEventListener('change', async e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const statusEl = document.getElementById('artistUploadStatus');
+  statusEl.textContent = 'Subiendo...';
+  statusEl.style.display = 'block';
+  statusEl.style.color = 'var(--muted)';
+  try {
+    const url = await uploadToCloudinary(file);
+    setArtistPhoto(url);
+    // Save artist photo URL to GitHub alongside gallery
+    const res = await fetch('/.netlify/functions/gallery-read');
+    const data = await res.json();
+    const saveRes = await fetch('/.netlify/functions/gallery-save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ images: uploadedImages, sha: data.sha, artistPhoto: url })
+    });
+    const saved = await saveRes.json();
+    if (saved.sha) {
+      galleryFileSha = saved.sha;
+      statusEl.textContent = '✓ Foto guardada';
+      statusEl.style.color = '#5dcaa5';
+    } else { throw new Error(saved.error); }
+  } catch(err) {
+    statusEl.textContent = 'Error: ' + err.message;
+    statusEl.style.color = '#e05555';
+  }
+  e.target.value = '';
 });
 
 // ─── INIT ───

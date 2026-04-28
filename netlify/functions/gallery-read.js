@@ -19,19 +19,23 @@ exports.handler = async () => {
       return {
         statusCode: 200,
         headers: { 'Access-Control-Allow-Origin': '*' },
-        body: JSON.stringify({ images: [], sha: null }),
+        body: JSON.stringify({ images: [], artistPhoto: null, sha: null }),
       };
     }
 
     const data = await res.json();
-    const images = JSON.parse(
+    const parsed = JSON.parse(
       Buffer.from(data.content.replace(/\n/g, ''), 'base64').toString('utf-8')
     );
 
     return {
       statusCode: 200,
       headers: { 'Access-Control-Allow-Origin': '*' },
-      body: JSON.stringify({ images, sha: data.sha }),
+      body: JSON.stringify({
+        images: parsed.images || [],
+        artistPhoto: parsed.artistPhoto || null,
+        sha: data.sha,
+      }),
     };
   } catch (e) {
     return {

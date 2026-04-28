@@ -21,11 +21,17 @@ exports.handler = async (event) => {
   const GITHUB_FILE = 'gallery.json';
 
   try {
-    const { images, sha } = JSON.parse(event.body);
+    const { images, sha, artistPhoto } = JSON.parse(event.body);
+
+    // Read current file to preserve fields not being updated
+    let currentArtistPhoto = artistPhoto ?? null;
+    let currentImages = images ?? [];
+
+    const payload = { images: currentImages, artistPhoto: currentArtistPhoto };
 
     const body = {
       message: 'Actualizar galería TiTi Studio',
-      content: Buffer.from(JSON.stringify(images)).toString('base64'),
+      content: Buffer.from(JSON.stringify(payload)).toString('base64'),
     };
     if (sha) body.sha = sha;
 
