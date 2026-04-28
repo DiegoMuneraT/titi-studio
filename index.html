@@ -2162,6 +2162,63 @@ const galleryData = [
   { id: 9, src: 'https://picsum.photos/seed/ink9/400/520', cat: 'realismo', label: 'Realismo' },
 ];
 
+// ─── CLOUDINARY + NETLIFY FUNCTIONS ───
+const CLOUDINARY_CLOUD = 'dp0wdpsf6';
+const CLOUDINARY_PRESET = 'titi_studio';
+
+let uploadedImages = [];
+let galleryFileSha = null;
+
+function setStatus(msg, type='info') {
+  const el = document.getElementById('uploadStatus');
+  if (!el) return;
+  el.textContent = msg;
+  el.style.color = type === 'error' ? '#e05555' : type === 'success' ? '#5dcaa5' : 'var(--muted)';
+  el.style.display = msg ? 'block' : 'none';
+}
+
+async function loadImagesFromGitHub() {
+  try {
+    const res = await fetch('/.netlify/functions/gallery-read');
+    const data = await res.json();
+    if (data.error) return;
+    galleryFileSha = data.sha;
+    uploadedImages = data.images;
+    renderGallery();
+  } catch(e) { console.warn('Error cargando galería:', e); }
+}
+
+async function saveImagesToGitHub() {
+  setStatus('Guardando...');
+  try {
+    const res = await fetch('/.netlify/functions/gallery-save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ images: uploadedImages, sha: galleryFileSha })
+    });
+    const data = await res.json();
+    if (data.sha) {
+      galleryFileSha = data.sha;
+      setStatus('✓ Guardado correctamente', 'success');
+      setTimeout(() => setStatus(''), 3000);
+    } else {
+      setStatus('Error al guardar: ' + (data.error || 'desconocido'), 'error');
+    }
+  } catch(e) { setStatus('Error de red', 'error'); }
+}
+
+async function uploadToCloudinary(file) {
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('upload_preset', CLOUDINARY_PRESET);
+  const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/image/upload`, { method: 'POST', body: fd });
+  const data = await res.json();
+  if (!data.secure_url) throw new Error(data.error?.message || 'Error Cloudinary');
+  return data.secure_url;
+}
+
+loadImagesFromGitHub();
+
 let currentFilter = 'todo';
 let adminMode = false;
 
@@ -2392,62 +2449,6 @@ document.getElementById('contactForm').addEventListener('submit', async function
 // ─── INIT ───
 renderGallery();
 
-// ─── CLOUDINARY + NETLIFY FUNCTIONS ───
-const CLOUDINARY_CLOUD = 'dp0wdpsf6';
-const CLOUDINARY_PRESET = 'titi_studio';
-
-let uploadedImages = [];
-let galleryFileSha = null;
-
-function setStatus(msg, type='info') {
-  const el = document.getElementById('uploadStatus');
-  if (!el) return;
-  el.textContent = msg;
-  el.style.color = type === 'error' ? '#e05555' : type === 'success' ? '#5dcaa5' : 'var(--muted)';
-  el.style.display = msg ? 'block' : 'none';
-}
-
-async function loadImagesFromGitHub() {
-  try {
-    const res = await fetch('/.netlify/functions/gallery-read');
-    const data = await res.json();
-    if (data.error) return;
-    galleryFileSha = data.sha;
-    uploadedImages = data.images;
-    renderGallery();
-  } catch(e) { console.warn('Error cargando galería:', e); }
-}
-
-async function saveImagesToGitHub() {
-  setStatus('Guardando...');
-  try {
-    const res = await fetch('/.netlify/functions/gallery-save', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ images: uploadedImages, sha: galleryFileSha })
-    });
-    const data = await res.json();
-    if (data.sha) {
-      galleryFileSha = data.sha;
-      setStatus('✓ Guardado correctamente', 'success');
-      setTimeout(() => setStatus(''), 3000);
-    } else {
-      setStatus('Error al guardar: ' + (data.error || 'desconocido'), 'error');
-    }
-  } catch(e) { setStatus('Error de red', 'error'); }
-}
-
-async function uploadToCloudinary(file) {
-  const fd = new FormData();
-  fd.append('file', file);
-  fd.append('upload_preset', CLOUDINARY_PRESET);
-  const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/image/upload`, { method: 'POST', body: fd });
-  const data = await res.json();
-  if (!data.secure_url) throw new Error(data.error?.message || 'Error Cloudinary');
-  return data.secure_url;
-}
-
-loadImagesFromGitHub();
 </script>
 
 </body>
