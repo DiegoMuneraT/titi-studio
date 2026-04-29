@@ -257,8 +257,9 @@
   .hero-eyebrow {
     display: flex;
     align-items: center;
-    gap: 1rem;
+    gap: 0.75rem;
     margin-bottom: 1.5rem;
+    flex-wrap: wrap;
   }
 
   .hero-eyebrow::before {
@@ -1426,6 +1427,11 @@
     .services-grid { grid-template-columns: 1fr; }
     .aftercare-grid { grid-template-columns: 1fr; }
     .footer-top { flex-direction: column; }
+    .hero-stats { gap: 1.5rem; flex-wrap: wrap; margin-top: 2rem; padding-top: 1.5rem; }
+    .stat-item .num { font-size: 1.8rem; }
+    .stat-item .label { font-size: 0.6rem; }
+    .scroll-indicator { display: none; }
+    .hero-eyebrow span { font-size: 0.62rem; }
   }
 
   /* ─── ANIMATE ON SCROLL ─── */
@@ -1725,7 +1731,7 @@
         Con más de siete años dedicado al arte de tatuar, he desarrollado un lenguaje 
         visual propio que fusiona la precisión técnica con una sensibilidad artística 
         profunda. Formado como tatuador y perfeccionado en los mejores estudios 
-        de España y España, cada pieza que creo lleva mi sello único.
+        de Medellín y España, cada pieza que creo lleva mi sello único.
       </p>
       <p class="artist-bio" style="margin-top:-1rem">
         Creo en los tatuajes como relatos. Me interesa entender la historia detrás de 
